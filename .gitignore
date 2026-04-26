@@ -1,4 +1,5 @@
 .env/
 *.zip
 *.png
+*.csv
 punkt
