@@ -1,4 +1,5 @@
 .env/
+.venv
 *.zip
 *.png
 *.csv
