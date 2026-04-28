@@ -3,6 +3,7 @@
 *.zip
 *.png
 *.csv
+*dataset
 punkt
 finetuned_bert_dupes/
 checkpoint*
