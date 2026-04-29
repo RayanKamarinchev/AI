@@ -1,0 +1,11 @@
+georgia/finetunebert - simple finetunebert
+neoai/segmentation
+neoai/ai_text_detection_bypass
+
+
+
+
+
+
+
+neoai/nlp - strange
