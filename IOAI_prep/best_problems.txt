@@ -1,11 +1,11 @@
 georgia/finetunebert - simple finetunebert
 neoai/segmentation
 neoai/ai_text_detection_bypass
+usaaio - very math heavy
 
 
 
-
-
+vector field problem usaaio/2026/r2/d1/p2
 
 
 neoai/nlp - strange
