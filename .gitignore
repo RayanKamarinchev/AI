@@ -9,3 +9,4 @@ finetuned_bert_dupes/
 checkpoint*
 my_custom_bert_model
 Data
+data*
