@@ -1,11 +1,11 @@
-georgia/finetunebert - simple finetunebert
+georgia/finetunebert and romania/nitro/code_translation finetunebert
 neoai/segmentation
 neoai/ai_text_detection_bypass
 usaaio - very math heavy
 greece/emoptions - adversal attack on image classification
 georgia/2026/reduction - interesting feature selection problem
 georgia/2026/planetx - nice problem
-
+romania/nitro/bound_boxes - really nice problem
 
 vector field problem usaaio/2026/r2/d1/p2
 
