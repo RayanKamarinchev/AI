@@ -6,6 +6,7 @@ greece/emoptions - adversal attack on image classification
 georgia/2026/reduction - interesting feature selection problem
 georgia/2026/planetx - nice problem
 romania/nitro/bound_boxes - really nice problem
+romania/roai_translation - very interesting nlp concepts
 
 vector field problem usaaio/2026/r2/d1/p2
 
