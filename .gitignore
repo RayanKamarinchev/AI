@@ -10,3 +10,5 @@ checkpoint*
 my_custom_bert_model
 Data
 data*
+wiki.en.small.vec
+wiki.ro.small.vec
