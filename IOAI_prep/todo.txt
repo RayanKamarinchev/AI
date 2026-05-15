@@ -1,2 +1,3 @@
 IOAI_prep\georgia\2026\reduction\mani.ipynb
 IOAI_prep\hungary\2025\problem3.ipynb
+IOAI_prep\romania\nitro\sad_squidward\main.ipynb
