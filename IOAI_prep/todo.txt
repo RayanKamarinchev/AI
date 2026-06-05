@@ -1,4 +1,5 @@
-IOAI_prep\georgia\2026\reduction\mani.ipynb
-IOAI_prep\hungary\2025\problem3.ipynb
-IOAI_prep\romania\nitro\sad_squidward\main.ipynb
-IOAI_prep\poland\3_2\llm\main.ipynb
+IOAI_prep\hungary\2026\model_interpretation\main.ipynb
+IOAI_prep\neoai\05_hogspell\ru-hogspell-baseline-solution.ipynb
+IOAI_prep\neoai\ai_text_detection_bypass\solution.ipynb
+IOAI_prep\poland\2_2\abnormal_dist\main.ipynb
+IOAI_prep\romania\nitro\sequence_ordering\main.ipynb - understand
