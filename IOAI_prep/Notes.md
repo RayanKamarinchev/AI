@@ -77,6 +77,11 @@ for rank, idx in enumerate(top_idx):
     print(f"Rank {rank+1}: {key}  MI={mi_nd[idx]:.4f}")
 ```
 
+### Selection
+- Random forest
+- PCA
+- Mutual Information
+- recursive feature elimination RFE
 # Optimization
 - AdamW for the win
 - optuna xgboost for ml
@@ -159,7 +164,11 @@ transform = transforms.Compose([
 ### Losses
 
 #### Focal
-
+```
+def focal_loss_multiclass(logits, targets, gamma=2.0):  
+	ce = F.cross_entropy(logits, targets, reduction="none")  
+	return ((1 - torch.exp(-ce)).pow(gamma) * ce).mean()
+```
 
 #### Dice
 
@@ -180,6 +189,89 @@ ssim = StructuralSimilarityIndexMeasure(data_range=1.0)
 ```
 
 ### Classification
+
+```
+class SEBlock(nn.Module):
+    def __init__(self, channels, reduction=4):
+        super().__init__()
+        hidden = channels // reduction
+        self.fc = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(channels, hidden, 1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(hidden, channels, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return x * self.fc(x)
+
+
+class MBConv(nn.Module):
+    def __init__(self, in_ch, out_ch, stride, expand=2, use_se=True):
+        super().__init__()
+
+        hidden = in_ch * expand
+
+        self.use_res = (stride == 1 and in_ch == out_ch)
+
+        self.block = nn.Sequential(
+            nn.Conv2d(in_ch, hidden, 1, bias=False),
+            nn.BatchNorm2d(hidden),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(hidden, hidden, 3, stride=stride, padding=1, groups=hidden, bias=False),
+            nn.BatchNorm2d(hidden),
+            nn.ReLU(inplace=True),
+
+            SEBlock(hidden) if use_se else nn.Identity(),
+
+            nn.Conv2d(hidden, out_ch, 1, bias=False),
+            nn.BatchNorm2d(out_ch),
+        )
+
+    def forward(self, x):
+        out = self.block(x)
+        return out + x if self.use_res else out
+
+
+class Model(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.stem = nn.Sequential(
+            nn.Conv2d(3, 32, 3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True)
+        )
+
+        self.blocks = nn.Sequential(
+            MBConv(32, 32, stride=1, expand=2),
+            MBConv(32, 32, stride=1, expand=2),
+
+            MBConv(32, 64, stride=2, expand=2),
+            MBConv(64, 64, stride=1, expand=2),
+
+            MBConv(64, 128, stride=2, expand=2),
+            MBConv(128, 128, stride=1, expand=2),
+        )
+
+        self.head = nn.Sequential(
+            nn.Conv2d(128, 128, 1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
+    def forward(self, x):
+        x = self.stem(x)
+        x = self.blocks(x)
+        x = self.head(x)
+        return x
+```
+
 
 ```
 nn.Sequential(
@@ -353,6 +445,8 @@ def collate_fn(batch):
 
 #### Embeddings feature engineering
 
+[[semantic_changes.ipynb]]
+
 ```
 def get_features(word):
     i0 = w2i_1900[word]
@@ -370,9 +464,8 @@ def get_features(word):
 #### TfIdf
 
 ```
-TfidfVectorizer(analyzer='char', ngram_range=(2,5))
-TfidfVectorizer(analyzer='char_wb', ngram_range=(3, 5))
-TfidfVectorizer(ngram_range=(1, 2), max_features=3000, sublinear_tf=True)
+TfidfVectorizer(analyzer='char', ngram_range=(2,5)) #character patterns
+TfidfVectorizer(analyzer='word' ngram_range=(1, 2), max_features=20000, sublinear_tf=True, stop_words='english')
 
 # since tf-idf output is sparse
 TruncatedSVD(128)
@@ -416,6 +509,7 @@ inputs = processor(images=img, text=options, return_tensors='pt', padding=True, 
         indexes = outputs['logits_per_image'].squeeze(0).argsort(descending = True)[:5]
 ```
 
+#### Decoder
 ```
 def last_token_pool(self, last_hidden_states, attention_mask):
         left_padding = (attention_mask[:, -1].sum() == attention_mask.shape[0])
@@ -426,7 +520,20 @@ def last_token_pool(self, last_hidden_states, attention_mask):
             batch_size = last_hidden_states.shape[0]
             return last_hidden_states[torch.arange(batch_size, device=last_hidden_states.device), sequence_lengths]
 ```
-
+#### Encoder
+```
+def mean_pool(self, last_hidden_states, attention_mask):
+    # Expand mask to match hidden state dimensions [batch, seq_len, hidden_dim]
+    mask = attention_mask.unsqueeze(-1).expand(last_hidden_states.size()).float()
+    
+    # Zero out padding token vectors, sum real tokens
+    sum_embeddings = torch.sum(last_hidden_states * mask, dim=1)
+    
+    # Count real tokens per sequence, clamp avoids division by zero
+    sum_mask = torch.clamp(mask.sum(dim=1), min=1e-9)
+    
+    return sum_embeddings / sum_mask  
+```
 ### Finetune
 [[finetune_hf.ipynb]]
 [[finetune_torch.ipynb]]
@@ -494,15 +601,25 @@ model.print_trainable_parameters()
 #### Triplet loss
 [[sequence_ordering/main.ipynb]]
 #### Contrastive loss
-```
-def loss_fn(image_emb, text_emb):
-    image_emb = torch.nn.functional.normalize(image_emb, dim=-1)
-    text_emb = torch.nn.functional.normalize(text_emb, dim=-1)
-    sim = image_emb @ text_emb.T
-    return (-1/2)*(torch.mean(torch.diagonal(torch.log_softmax(sim/torch.exp(model_CLIP.log_tau), dim=0))) + torch.mean(torch.diagonal(torch.log_softmax(sim/torch.exp(model_CLIP.log_tau), dim=1))))
+``` 
+def loss_fn(image_emb, text_emb, logit_scale):  
+	image_emb = F.normalize(image_emb, dim=-1)  
+	text_emb = F.normalize(text_emb, dim=-1)  
+	  
+	logits = image_emb @ text_emb.T * logit_scale.exp()  
+	  
+	targets = torch.arange(image_emb.size(0), device=image_emb.device)  
+	  
+	loss_i2t = F.cross_entropy(logits, targets)  
+	loss_t2i = F.cross_entropy(logits.T, targets)  
+	  
+	return (loss_i2t + loss_t2i) / 2
 ```
 
 # ML
+
+### Unsupervised
+- Adjusted Random Index ARI
 
 - Awesome solution: [[ml_gold_standard/main.ipynb]]
 ### PCA + GaussianMixture
