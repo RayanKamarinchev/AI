@@ -664,19 +664,25 @@ y, sample_rate = librosa.load(sample_path)
 
 librosa.display.waveshow(y=y, sr=sample_rate)
 
+
 D = np.abs(librosa.stft(y, n_fft=2048, hop_length=512))
 DB = librosa.amplitude_to_db(D, ref = np.max)
 librosa.display.specshow(DB, sr=sample_rate, hop_length=512,
                          x_axis='time', y_axis='log')
-                         
-                         
+
+
+
 S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64) #(y, sr=sr)
+librosa.display.specshow(librosa.power_to_db(S, ref=np.max), sr=SR,
+						x_axis="time", y_axis="mel", cmap="magma")
 S_DB = librosa.amplitude_to_db(S, ref=np.max)
+
 
 
 db = librosa.power_to_db(mel, ref=np.max)
 librosa.display.specshow(db, sr=SR, x_axis='time', y_axis='hz')
 plt.colorbar()
+
 
 Padding:
 x_train = [np.pad(entry, pad_width=((0,0), (0, 53-entry.shape[1])), mode='constant') for entry in x_train]
