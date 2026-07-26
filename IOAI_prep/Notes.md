@@ -134,6 +134,25 @@ def compute_kernel() -> torch.Tensor:
     return kernel
 ```
 
+[[autocorrect/main.ipynb]]
+```
+if train:
+                optimizer.zero_grad()
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
+
+            # weight by real (non-pad) tokens so the epoch average matches the loss definition
+            mask = labels != pad_id
+            n = mask.sum().item()
+            total_loss += loss.item() * n
+            total_tokens += n
+            correct += ((outputs.argmax(-1) == labels) & mask).sum().item()
+```
 # Image
 
 ### Augmentations
@@ -493,6 +512,48 @@ class LSTMClassifier(nn.Module):
         return logits
 ```
 
+```
+class LSTMAutocorrect(nn.Module):
+    def __init__(self, vocab_size, embed_size, hidden_size):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_size)
+        self.lstm = nn.LSTM(embed_size, hidden_size, batch_first=True)
+        self.fc = nn.Linear(hidden_size, vocab_size)
+
+    def forward(self, x, lens):
+        x = self.embedding(x)
+        packed = nn.utils.rnn.pack_padded_sequence(x, lens.cpu(), batch_first=True, enforce_sorted=False)
+        packed_outputs, (_, _) = self.lstm(packed)
+        x, _ = nn.utils.rnn.pad_packed_sequence(packed_outputs, batch_first=True)
+        x = self.fc(x)
+        return x
+```
+
+#### GRU
+
+[[autocorrect/main.ipynb]]
+```
+class BiGRU(nn.Module):
+    def __init__(self, vocab_size, embed_size,  hidden_size, num_layers):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_size)
+        self.bigru = nn.GRU(embed_size, hidden_size, num_layers, batch_first=True, bidirectional=True)
+        self.fc = nn.Linear(2*hidden_size, vocab_size)
+
+    def forward(self, x, lens=None, hidden=None):
+        x = self.embedding(x)
+        if lens is None:
+            out, hidden = self.bigru(x, hidden)
+        else:
+            packed = nn.utils.rnn.pack_padded_sequence(x, lens.cpu(), batch_first=True, enforce_sorted=False)
+            out, hidden = self.bigru(packed, hidden)
+            out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True)
+
+        out = self.fc(out)
+        return out
+
+```
+
 #### LLMs
 - custom sampling [[hungary/2026/llm/main.ipynb]]
 - Whole GPT2 architecture + beam search [[3_2/llm/main.ipynb]]
@@ -597,7 +658,28 @@ lora_config = LoraConfig(
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 ```
+#### Collation
 
+```
+correct = {(row['item1'], row['item2']): row['result'] for row in train_ds}
+
+def collate(batch):
+    a  = [x['item1']  for x in batch]
+    b  = [x['item2']  for x in batch]
+    c  = [x['result'] for x in batch]
+    n  = len(batch)
+    triples = []
+    for i in range(n):
+        j, k = random.randrange(n), random.randrange(n)
+        triples += [(a[i], b[i], c[i]),      # positive
+                    (a[i], b[j], c[i]),      # wrong second ingredient
+                    (a[i], b[i], c[k])]      # wrong result
+    texts  = [f'Combining {x} and {y} creates {z}' for x, y, z in triples]
+    labels = torch.tensor([correct.get((x, y)) == z for x, y, z in triples]).long()
+    enc = tokenizer(texts, padding=True, truncation=True, max_length=48, return_tensors='pt')
+    enc['labels'] = labels
+    return enc
+```
 #### Triplet loss
 [[sequence_ordering/main.ipynb]]
 #### Contrastive loss
@@ -760,6 +842,11 @@ class AudioCRNN(nn.Module):
 - [[problem2.ipynb]]
 - [[rl_implementation/main.ipynb]]
 - [[stochastic_rift_baseline.ipynb]]
+
+### Completely separate but interesting
+https://aicc-official.org/solutions/round-4/extreme-condensation
+https://github.com/AI-Community-Contest/solutions/blob/main/round-3/drawn-apart.ipynb
+https://github.com/AI-Community-Contest/solutions/blob/main/round-5/watermark-removal.ipynb
 
 # Math
 ### SVD compression
